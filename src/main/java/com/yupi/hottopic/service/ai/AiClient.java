@@ -34,6 +34,9 @@ public class AiClient {
 
     private static final List<String> IMPORTANCE_LEVELS = List.of("low", "medium", "high", "urgent");
 
+    /** 未配置时的占位 key(与 application.yml 默认值一致;不以 sk- 开头,避免被 secret 扫描误报) */
+    private static final String PLACEHOLDER_API_KEY = "your-deepseek-api-key-here";
+
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
     private final String apiKey;
@@ -233,7 +236,7 @@ public class AiClient {
 
     private boolean hasApiKey() {
         // 占位 key 视为未配置,直接走降级,避免无意义的失败调用
-        return apiKey != null && !apiKey.isBlank() && !apiKey.contains("placeholder");
+        return apiKey != null && !apiKey.isBlank() && !PLACEHOLDER_API_KEY.equals(apiKey);
     }
 
     private List<String> mergeUnique(String keyword, List<String>... extras) {

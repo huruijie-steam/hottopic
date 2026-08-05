@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/hottopic?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
-    password: ${DB_PASSWORD:root}
+    password: ${DB_PASSWORD:134679hu}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   sql:
@@ -16,12 +16,25 @@ spring:
   # Spring AI:DeepSeek 官方接入(占位 key 保证未配置时应用可启动;AiClient 识别占位符自动降级)
   ai:
     deepseek:
-      api-key: ${DEEPSEEK_API_KEY:sk-placeholder-not-configured}
+      api-key: ${DEEPSEEK_API_KEY:your-deepseek-api-key-here}
       chat:
         options:
           model: deepseek-chat
           temperature: 0.2
           max-tokens: 1024
+
+  # 邮件通知(SMTP,未配置时应用照常运行,邮件自动跳过)
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
 
   cache:
     type: caffeine
@@ -54,6 +67,9 @@ app:
     relevance-threshold: 50       # 相关性过滤阈值
     strict-threshold: 65          # 未提及关键词时的严格阈值
     request-interval-ms: 2000     # 关键词间请求间隔
+  mail:
+    enabled: ${MAIL_ENABLED:false}  # 邮件通知总开关
+    to: ${MAIL_TO:}                 # 收件人(逗号分隔)
 
 logging:
   level:

@@ -11,12 +11,15 @@ import com.yupi.hottopic.mapper.HotspotMapper;
 import com.yupi.hottopic.service.NotificationService;
 import com.yupi.hottopic.service.ai.AiClient;
 import com.yupi.hottopic.service.collect.CollectService;
+import com.yupi.hottopic.service.mail.EmailService;
 import com.yupi.hottopic.util.KeywordUtils;
+import com.yupi.hottopic.ws.HotspotWebSocketHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 热点巡检编排(需求 HC-1 ~ HC-9 / AI-7 ~ AI-9),对应原项目 hotspotChecker.ts:
@@ -32,17 +35,23 @@ public class HotspotChecker {
     private final AiClient aiClient;
     private final HotspotMapper hotspotMapper;
     private final NotificationService notificationService;
+    private final EmailService emailService;
+    private final HotspotWebSocketHandler webSocketHandler;
     private final MonitorProperties props;
 
     public HotspotChecker(CollectService collectService,
                           AiClient aiClient,
                           HotspotMapper hotspotMapper,
                           NotificationService notificationService,
+                          EmailService emailService,
+                          HotspotWebSocketHandler webSocketHandler,
                           MonitorProperties props) {
         this.collectService = collectService;
         this.aiClient = aiClient;
         this.hotspotMapper = hotspotMapper;
         this.notificationService = notificationService;
+        this.emailService = emailService;
+        this.webSocketHandler = webSocketHandler;
         this.props = props;
     }
 
@@ -136,6 +145,21 @@ public class HotspotChecker {
                     hotspot.getId());
             log.info("  ✅ 新热点 [{}] 重要度={} 相关性={}: {}",
                     hotspot.getSource(), hotspot.getImportance(), hotspot.getRelevance(), truncate(hotspot.getTitle()));
+
+            // 9. WebSocket 实时推送(需求 NT-1):按关键词订阅推送 + 全局广播通知
+            webSocketHandler.sendToKeywordSubscribers(kw, "hotspot:new", hotspot);
+            Map<String, Object> notificationPayload = new java.util.HashMap<>();
+            notificationPayload.put("type", "hotspot");
+            notificationPayload.put("title", "发现新热点");
+            notificationPayload.put("content", hotspot.getTitle());
+            notificationPayload.put("hotspotId", hotspot.getId());
+            notificationPayload.put("importance", hotspot.getImportance());
+            webSocketHandler.broadcast("notification", notificationPayload);
+
+            // 10. 邮件通知(需求 NT-3:仅 high/urgent 级别)
+            if (List.of("high", "urgent").contains(analysis.getImportance())) {
+                emailService.sendHotspotEmail(hotspot);
+            }
 
             if (isTwitter) {
                 twitterProcessed++;

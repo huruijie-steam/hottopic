@@ -9,7 +9,9 @@ import com.yupi.hottopic.mapper.HotspotMapper;
 import com.yupi.hottopic.service.NotificationService;
 import com.yupi.hottopic.service.ai.AiClient;
 import com.yupi.hottopic.service.collect.CollectService;
+import com.yupi.hottopic.service.mail.EmailService;
 import com.yupi.hottopic.util.KeywordUtils;
+import com.yupi.hottopic.ws.HotspotWebSocketHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -26,6 +28,8 @@ class HotspotCheckerTest {
     private AiClient aiClient;
     private HotspotMapper hotspotMapper;
     private NotificationService notificationService;
+    private EmailService emailService;
+    private HotspotWebSocketHandler webSocketHandler;
     private HotspotChecker checker;
 
     @BeforeEach
@@ -34,8 +38,11 @@ class HotspotCheckerTest {
         aiClient = mock(AiClient.class);
         hotspotMapper = mock(HotspotMapper.class);
         notificationService = mock(NotificationService.class);
+        emailService = mock(EmailService.class);
+        webSocketHandler = mock(HotspotWebSocketHandler.class);
         MonitorProperties props = new MonitorProperties();
-        checker = new HotspotChecker(collectService, aiClient, hotspotMapper, notificationService, props);
+        checker = new HotspotChecker(collectService, aiClient, hotspotMapper, notificationService,
+                emailService, webSocketHandler, props);
 
         // 默认:AI 分析全部通过,采集返回一条
         when(aiClient.expandKeyword(anyString())).thenReturn(List.of("Spring Boot 4"));
@@ -140,5 +147,28 @@ class HotspotCheckerTest {
         verify(aiClient).analyzeContent(anyString(), eq("Spring Boot 4"), captor.capture());
         // 内容包含 "Spring Boot 4",应命中扩展词
         assertTrue(captor.getValue().matched());
+    }
+
+    @Test
+    void 新热点_触发WebSocket推送与广播() {
+        checker.checkKeyword(keyword());
+        verify(webSocketHandler).sendToKeywordSubscribers(eq("Spring Boot 4"), eq("hotspot:new"), any());
+        verify(webSocketHandler).broadcast(eq("notification"), any());
+    }
+
+    @Test
+    void high热点_触发邮件() {
+        when(aiClient.analyzeContent(anyString(), anyString(), any()))
+                .thenReturn(analysis(true, 90, true, "high"));
+        checker.checkKeyword(keyword());
+        verify(emailService).sendHotspotEmail(any());
+    }
+
+    @Test
+    void low热点_不触发邮件() {
+        when(aiClient.analyzeContent(anyString(), anyString(), any()))
+                .thenReturn(analysis(true, 80, true, "low"));
+        checker.checkKeyword(keyword());
+        verify(emailService, never()).sendHotspotEmail(any());
     }
 }

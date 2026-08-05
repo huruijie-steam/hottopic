@@ -8,6 +8,7 @@ import com.yupi.hottopic.entity.Keyword;
 import com.yupi.hottopic.mapper.HotspotMapper;
 import com.yupi.hottopic.service.NotificationService;
 import com.yupi.hottopic.service.ai.AiClient;
+import com.yupi.hottopic.service.collect.AccountDetector;
 import com.yupi.hottopic.service.collect.CollectService;
 import com.yupi.hottopic.service.mail.EmailService;
 import com.yupi.hottopic.util.KeywordUtils;
@@ -26,6 +27,7 @@ class HotspotCheckerTest {
 
     private CollectService collectService;
     private AiClient aiClient;
+    private AccountDetector accountDetector;
     private HotspotMapper hotspotMapper;
     private NotificationService notificationService;
     private EmailService emailService;
@@ -36,12 +38,13 @@ class HotspotCheckerTest {
     void setUp() {
         collectService = mock(CollectService.class);
         aiClient = mock(AiClient.class);
+        accountDetector = mock(AccountDetector.class);
         hotspotMapper = mock(HotspotMapper.class);
         notificationService = mock(NotificationService.class);
         emailService = mock(EmailService.class);
         webSocketHandler = mock(HotspotWebSocketHandler.class);
         MonitorProperties props = new MonitorProperties();
-        checker = new HotspotChecker(collectService, aiClient, hotspotMapper, notificationService,
+        checker = new HotspotChecker(collectService, aiClient, accountDetector, hotspotMapper, notificationService,
                 emailService, webSocketHandler, props);
 
         // 默认:AI 分析全部通过,采集返回一条
@@ -55,6 +58,8 @@ class HotspotCheckerTest {
         r.setUrl("https://example.com/1");
         r.setSource("bing");
         when(collectService.collect(anyString())).thenReturn(List.of(r));
+        when(accountDetector.detectAndFetch(anyString()))
+                .thenReturn(AccountDetector.DetectResult.empty());
     }
 
     private AIAnalysis analysis(boolean isReal, int relevance, boolean mentioned, String importance) {

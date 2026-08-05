@@ -10,14 +10,17 @@ import com.yupi.hottopic.entity.Notification;
 import com.yupi.hottopic.mapper.HotspotMapper;
 import com.yupi.hottopic.service.NotificationService;
 import com.yupi.hottopic.service.ai.AiClient;
+import com.yupi.hottopic.service.collect.AccountDetector;
 import com.yupi.hottopic.service.collect.CollectService;
 import com.yupi.hottopic.service.mail.EmailService;
+import com.yupi.hottopic.util.HotspotResultUtils;
 import com.yupi.hottopic.util.KeywordUtils;
 import com.yupi.hottopic.ws.HotspotWebSocketHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +36,7 @@ public class HotspotChecker {
 
     private final CollectService collectService;
     private final AiClient aiClient;
+    private final AccountDetector accountDetector;
     private final HotspotMapper hotspotMapper;
     private final NotificationService notificationService;
     private final EmailService emailService;
@@ -41,6 +45,7 @@ public class HotspotChecker {
 
     public HotspotChecker(CollectService collectService,
                           AiClient aiClient,
+                          AccountDetector accountDetector,
                           HotspotMapper hotspotMapper,
                           NotificationService notificationService,
                           EmailService emailService,
@@ -48,6 +53,7 @@ public class HotspotChecker {
                           MonitorProperties props) {
         this.collectService = collectService;
         this.aiClient = aiClient;
+        this.accountDetector = accountDetector;
         this.hotspotMapper = hotspotMapper;
         this.notificationService = notificationService;
         this.emailService = emailService;
@@ -84,9 +90,20 @@ public class HotspotChecker {
         List<String> expanded = aiClient.expandKeyword(kw);
         log.info("  扩展为 {} 个变体: {}", expanded.size(), String.join(", ", expanded.subList(0, Math.min(5, expanded.size()))));
 
-        // 2. 多源聚合抓取(HC-3)
-        List<SearchResult> results = collectService.collect(kw);
-        log.info("  聚合结果: {} 条", results.size());
+        // 1.5 账号检测(HC-4):关键词是 B 站账号时直接拉取最新视频
+        AccountDetector.DetectResult accountResult = accountDetector.detectAndFetch(kw);
+
+        // 2. 多源聚合抓取(HC-3):账号内容优先,再合并多源结果
+        List<SearchResult> merged = new ArrayList<>();
+        if (!accountResult.results().isEmpty()) {
+            log.info("  账号内容 {} 条优先加入", accountResult.results().size());
+            merged.addAll(accountResult.results());
+        }
+        merged.addAll(collectService.collect(kw));
+        List<SearchResult> results = HotspotResultUtils.prioritize(
+                HotspotResultUtils.filterByFreshness(
+                        HotspotResultUtils.deduplicate(merged), props.getMaxAgeHours()));
+        log.info("  聚合结果: {} 条(去重新鲜后)", results.size());
 
         // 3. 配额处理(Twitter 优先多给,HC-8)
         int twitterProcessed = 0;

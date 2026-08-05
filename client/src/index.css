@@ -11,6 +11,39 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Aceternity 风格动画(Tailwind 4 @theme) */
+@theme inline {
+  --animate-spotlight: spotlight 2s ease 0.75s 1 forwards;
+  --animate-meteor-effect: meteor 5s linear infinite;
+  --animate-pulse-soft: pulse-soft 3s ease-in-out infinite;
+
+  @keyframes spotlight {
+    0% { opacity: 0; transform: translate(-72%, -62%) scale(0.5); }
+    100% { opacity: 1; transform: translate(-50%, -40%) scale(1); }
+  }
+  @keyframes meteor {
+    0% { transform: rotate(215deg) translateX(0); opacity: 1; }
+    70% { opacity: 1; }
+    100% { transform: rotate(215deg) translateX(-500px); opacity: 0; }
+  }
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+}
+
+/* MovingBorder 的 --angle 动画需要注册为可动画属性 */
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes spin {
+  from { --angle: 0deg; }
+  to { --angle: 360deg; }
+}
+
 /* 滚动条 */
 ::-webkit-scrollbar {
   width: 8px;

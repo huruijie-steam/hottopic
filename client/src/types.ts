@@ -36,7 +36,9 @@ export interface Hotspot {
   danmakuCount?: number | null;
   authorName?: string | null;
   authorUsername?: string | null;
+  authorAvatar?: string | null;
   authorFollowers?: number | null;
+  authorVerified?: boolean | null;
   publishedAt?: string | null;
   createdAt: string;
   keywordId?: string | null;

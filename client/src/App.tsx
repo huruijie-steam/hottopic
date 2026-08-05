@@ -8,6 +8,9 @@ import KeywordsPage from './pages/KeywordsPage';
 import SearchPage from './pages/SearchPage';
 import SettingsPage from './pages/SettingsPage';
 import { relativeTime } from './utils/format';
+import { BackgroundBeams } from './components/ui/background-beams';
+import { Meteors } from './components/ui/meteors';
+import { Spotlight } from './components/ui/spotlight';
 
 type Tab = 'dashboard' | 'keywords' | 'search' | 'settings';
 
@@ -102,9 +105,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      {/* 背景光效 */}
+      {/* 背景特效:光束网格 + 聚光 + 流星 */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/4 h-96 w-96 rounded-full bg-indigo-600/20 blur-3xl" />
+        <BackgroundBeams />
+        <Spotlight className="-top-40 -left-10" fill="#6366f1" />
+        <Meteors number={8} />
         <div className="absolute top-1/3 right-1/5 h-80 w-80 rounded-full bg-pink-600/10 blur-3xl" />
       </div>
 

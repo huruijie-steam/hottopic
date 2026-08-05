@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Hotspot, HotspotQuery, Keyword } from '../types';
 import { hotspotsApi } from '../services/api';
-import FilterSortBar, { defaultFilters, type Filters } from '../components/FilterSortBar';
+import FilterSortBar from '../components/FilterSortBar';
+import { defaultFilters, type Filters } from '../components/filters';
 import HotspotCard from '../components/HotspotCard';
 import StatCards from '../components/StatCards';
 

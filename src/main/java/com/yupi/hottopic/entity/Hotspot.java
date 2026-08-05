@@ -17,6 +17,10 @@ import java.time.LocalDateTime;
 @TableName("hotspot")
 public class Hotspot {
 
+    /** 综合热度分(0-100,查询时计算,不落库) */
+    @TableField(exist = false)
+    private Integer heatScore;
+
     @TableId(type = IdType.ASSIGN_UUID)
     private String id;
 

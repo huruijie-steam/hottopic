@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: HotTopic
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/hottopic?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: ${DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  sql:
+    init:
+      mode: always          # 启动时执行 schema.sql(表不存在时创建)
+      continue-on-error: true
+
+  # Spring AI:DeepSeek 官方接入(占位 key 保证未配置时应用可启动;AiClient 识别占位符自动降级)
+  ai:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:sk-placeholder-not-configured}
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.2
+          max-tokens: 1024
+
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=24h
+
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+server:
+  port: 3001
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_uuid
+
+# 热点巡检参数(对应需求 HC-1/HC-8/AI-8)
+app:
+  monitor:
+    cron: "0 */30 * * * *"        # 每 30 分钟巡检一次
+    max-age-hours: 168            # 新鲜度:7 天内的内容
+    twitter-quota: 15             # Twitter 每轮最多 AI 分析条数
+    other-quota: 10               # 其他来源合计配额
+    relevance-threshold: 50       # 相关性过滤阈值
+    strict-threshold: 65          # 未提及关键词时的严格阈值
+    request-interval-ms: 2000     # 关键词间请求间隔
+
+logging:
+  level:
+    com.yupi.hottopic: info

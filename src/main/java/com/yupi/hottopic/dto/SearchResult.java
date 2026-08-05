@@ -43,4 +43,7 @@ public class SearchResult {
 
     /** 附加信息(如 HN 的 points) */
     private Integer score;
+
+    /** 是否来自账号检测(需求 HC-4:账号内容豁免严格相关性阈值) */
+    private boolean accountContent;
 }

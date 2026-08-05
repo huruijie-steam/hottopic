@@ -7,11 +7,14 @@ import com.yupi.hottopic.dto.PageResult;
 import com.yupi.hottopic.dto.SearchResult;
 import com.yupi.hottopic.entity.Hotspot;
 import com.yupi.hottopic.mapper.HotspotMapper;
+import com.yupi.hottopic.service.collect.AccountDetector;
 import com.yupi.hottopic.service.collect.CollectService;
 import com.yupi.hottopic.util.HeatScoreUtils;
+import com.yupi.hottopic.util.HotspotResultUtils;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -22,10 +25,14 @@ public class HotspotService {
 
     private final HotspotMapper hotspotMapper;
     private final CollectService collectService;
+    private final AccountDetector accountDetector;
 
-    public HotspotService(HotspotMapper hotspotMapper, CollectService collectService) {
+    public HotspotService(HotspotMapper hotspotMapper,
+                          CollectService collectService,
+                          AccountDetector accountDetector) {
         this.hotspotMapper = hotspotMapper;
         this.collectService = collectService;
+        this.accountDetector = accountDetector;
     }
 
     /** 分页查询:多条件筛选 + 多维度排序(需求 HP-3/HP-4/HP-6) */
@@ -70,9 +77,19 @@ public class HotspotService {
         return hotspot;
     }
 
-    /** 全网搜索(需求 SR-1:聚合抓取 + 去重 + 优先级,不落库) */
+    /**
+     * 全网搜索(需求 SR-1:账号检测 + 多源聚合 + 去重,不落库)。
+     * 输入 UP 主名字时,优先返回其最新内容。
+     */
     public List<SearchResult> search(String query) {
-        return collectService.collect(query);
+        List<SearchResult> merged = new ArrayList<>();
+        // 账号检测:关键词是 B 站/微博账号时拉取最新内容(需求 HC-4 的搜索场景复用)
+        AccountDetector.DetectResult accountResult = accountDetector.detectAndFetch(query);
+        if (!accountResult.results().isEmpty()) {
+            merged.addAll(accountResult.results());
+        }
+        merged.addAll(collectService.collect(query));
+        return HotspotResultUtils.prioritize(HotspotResultUtils.deduplicate(merged));
     }
 
     private void applySort(QueryWrapper<Hotspot> wrapper, String sortBy) {

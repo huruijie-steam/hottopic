@@ -20,7 +20,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -40,39 +39,94 @@ public class BilibiliFetcher implements SourceFetcher {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
     };
 
-    private final RateLimiter rateLimiter = new RateLimiter(2000);
+    private final RateLimiter rateLimiter = new RateLimiter(3000);
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.NORMAL)
+            // B 站风控对非浏览器的 HTTP/2 指纹敏感(Java 默认协商 HTTP/2 概率 412),强制 HTTP/1.1
+            .version(HttpClient.Version.HTTP_1_1)
             .build();
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * B 站风控 cookie(buvid3/b_nut 等),由服务端下发,首次访问首页获取。
+     * 随机伪造的 buvid3 会触发 412 风控,必须用真实 cookie 链。
+     */
+    private volatile String riskCookie;
+    private volatile long cookieFetchedAt = 0;
+    private static final long COOKIE_MAX_AGE_MS = 30 * 60 * 1000; // 30 分钟刷新一次
+
+    /** 获取(必要时刷新)风控 cookie */
+    private String getRiskCookie() {
+        long now = System.currentTimeMillis();
+        if (riskCookie != null && now - cookieFetchedAt < COOKIE_MAX_AGE_MS) {
+            return riskCookie;
+        }
+        synchronized (this) {
+            if (riskCookie != null && System.currentTimeMillis() - cookieFetchedAt < COOKIE_MAX_AGE_MS) {
+                return riskCookie;
+            }
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create("https://www.bilibili.com/"))
+                        .header("User-Agent", randomUserAgent())
+                        .timeout(Duration.ofSeconds(15))
+                        .GET()
+                        .build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                StringBuilder cookie = new StringBuilder();
+                response.headers().allValues("set-cookie").forEach(sc -> {
+                    String pair = sc.split(";")[0];
+                    if (pair.startsWith("buvid3=") || pair.startsWith("b_nut=") || pair.startsWith("buvid4=")) {
+                        if (cookie.length() > 0) {
+                            cookie.append("; ");
+                        }
+                        cookie.append(pair);
+                    }
+                });
+                if (cookie.length() > 0) {
+                    riskCookie = cookie.toString();
+                    cookieFetchedAt = now;
+                    log.info("已获取 B 站风控 cookie");
+                }
+            } catch (Exception e) {
+                log.warn("获取 B 站 cookie 失败: {}", e.getMessage());
+            }
+            return riskCookie;
+        }
+    }
 
     @Override
     public String source() {
         return "bilibili";
     }
 
-    /** 视频搜索 */
+    /** 视频搜索(第 1 页) */
     @Override
     public List<SearchResult> fetch(String query) {
+        return fetchPage(query, 1);
+    }
+
+    /** 视频搜索指定页(接口 pagesize 上限 20,pubdate 排序) */
+    public List<SearchResult> fetchPage(String query, int page) {
         rateLimiter.waitIfNeeded();
         try {
             String url = SEARCH_API + "?keyword=" + URLEncoder.encode(query, StandardCharsets.UTF_8)
-                    + "&search_type=video&order=pubdate&page=1&pagesize=20";
+                    + "&search_type=video&order=pubdate&page=" + page + "&pagesize=20";
             String body = get(url, "https://search.bilibili.com/");
             if (body == null) {
                 return List.of();
             }
             JsonNode root = objectMapper.readTree(body);
             if (root.path("code").asInt(-1) != 0) {
-                log.warn("Bilibili search code != 0 for \"{}\"", query);
+                log.warn("Bilibili search code != 0 for \"{}\" (page {})", query, page);
                 return List.of();
             }
             List<SearchResult> results = parseVideoList(root.path("data").path("result"));
-            log.info("Bilibili search for \"{}\": found {} results", query, results.size());
+            log.info("Bilibili search for \"{}\" (page {}): found {} results", query, page, results.size());
             return results;
         } catch (Exception e) {
-            log.warn("Bilibili search error for \"{}\": {}", query, e.getMessage());
+            log.warn("Bilibili search error for \"{}\" (page {}): {}", query, page, e.getMessage());
             return List.of();
         }
     }
@@ -202,18 +256,38 @@ public class BilibiliFetcher implements SourceFetcher {
     }
 
     private String get(String url, String referer) throws IOException, InterruptedException {
-        // 生成 buvid3 cookie 以避免 412 错误
-        String buvid3 = UUID.randomUUID().toString().replace("-", "") + "infoc";
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("User-Agent", randomUserAgent())
                 .header("Referer", referer)
                 .header("Accept", "application/json")
-                .header("Cookie", "buvid3=" + buvid3)
                 .timeout(Duration.ofSeconds(15))
-                .GET()
-                .build();
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                .GET();
+        String cookie = getRiskCookie();
+        if (cookie != null) {
+            builder.header("Cookie", cookie);
+        }
+        HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 412) {
+            // 风控:刷新 cookie 重试一次
+            log.warn("B 站接口 412 风控,刷新 cookie 重试");
+            synchronized (this) {
+                riskCookie = null;
+                cookieFetchedAt = 0;
+            }
+            String retryCookie = getRiskCookie();
+            if (retryCookie != null) {
+                HttpRequest.Builder retry = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .header("User-Agent", randomUserAgent())
+                        .header("Referer", referer)
+                        .header("Accept", "application/json")
+                        .header("Cookie", retryCookie)
+                        .timeout(Duration.ofSeconds(15))
+                        .GET();
+                response = httpClient.send(retry.build(), HttpResponse.BodyHandlers.ofString());
+            }
+        }
         return response.statusCode() == 200 ? response.body() : null;
     }
 

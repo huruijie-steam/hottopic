@@ -176,4 +176,40 @@ class HotspotCheckerTest {
         checker.checkKeyword(keyword());
         verify(emailService, never()).sendHotspotEmail(any());
     }
+
+    @Test
+    void 账号检测内容_豁免严格阈值() {
+        // 账号内容:标题不含关键词、AI 降级 50 分,但仍应入库(HC-4 语义)
+        SearchResult account = new SearchResult();
+        account.setTitle("这是一只美人鱼");
+        account.setContent("内容");
+        account.setUrl("https://example.com/account-video");
+        account.setSource("bilibili");
+        account.setAccountContent(true);
+        when(collectService.collect(anyString())).thenReturn(List.of());
+        when(accountDetector.detectAndFetch(anyString()))
+                .thenReturn(new AccountDetector.DetectResult(List.of(), List.of(account)));
+        when(aiClient.analyzeContent(anyString(), anyString(), any()))
+                .thenReturn(analysis(true, 50, false, "low"));
+
+        int count = checker.checkKeyword(keyword());
+        assertEquals(1, count);
+    }
+
+    @Test
+    void 账号内容_相关性低于普通阈值仍被过滤() {
+        SearchResult account = new SearchResult();
+        account.setTitle("低相关账号内容");
+        account.setContent("内容");
+        account.setUrl("https://example.com/low");
+        account.setSource("bilibili");
+        account.setAccountContent(true);
+        when(collectService.collect(anyString())).thenReturn(List.of());
+        when(accountDetector.detectAndFetch(anyString()))
+                .thenReturn(new AccountDetector.DetectResult(List.of(), List.of(account)));
+        when(aiClient.analyzeContent(anyString(), anyString(), any()))
+                .thenReturn(analysis(true, 30, false, "low"));
+
+        assertEquals(0, checker.checkKeyword(keyword()));
+    }
 }

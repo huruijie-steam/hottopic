@@ -132,7 +132,7 @@ public class HotspotChecker {
             KeywordUtils.PreMatchResult preMatch = KeywordUtils.preMatchKeyword(fullText, expanded);
             AIAnalysis analysis = aiClient.analyzeContent(fullText, kw, preMatch);
 
-            // 6. 三重过滤(AI-8)
+            // 6. 三重过滤(AI-8):账号检测内容豁免"未提及关键词"的严格阈值(HC-4 语义:账号本身就是关键词)
             if (!Boolean.TRUE.equals(analysis.getIsReal())) {
                 log.info("  ❌ 过滤疑似虚假内容: {}", truncate(item.getTitle()));
                 continue;
@@ -141,7 +141,7 @@ public class HotspotChecker {
                 log.info("  ⏭ 相关性不足({}): {}", analysis.getRelevance(), truncate(item.getTitle()));
                 continue;
             }
-            if (!Boolean.TRUE.equals(analysis.getKeywordMentioned())
+            if (!item.isAccountContent() && !Boolean.TRUE.equals(analysis.getKeywordMentioned())
                     && analysis.getRelevance() < props.getStrictThreshold()) {
                 log.info("  ⏭ 未提及关键词且相关性 < {} ({}): {}",
                         props.getStrictThreshold(), analysis.getRelevance(), truncate(item.getTitle()));

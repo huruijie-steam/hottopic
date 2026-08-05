@@ -1,0 +1,2 @@
+[permissions]
+allow = ["Bash(git remote:*)", "Bash=git config --get remote.origin.url; git status 2>&1 | Select-Object -First 3", "Bash=git remote add origin https://github.com/huruijie-steam/hottopic.git; git remote -v", "Bash=git status --short | Select-Object -First 30; git branch -a", "Bash=git add -A; git commit -m \"初始提交:HotTopic 热点话题项目\"; git branch -M main"]

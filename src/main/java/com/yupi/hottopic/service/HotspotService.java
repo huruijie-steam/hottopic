@@ -79,7 +79,8 @@ public class HotspotService {
         String sort = sortBy == null ? "" : sortBy;
         switch (sort) {
             case "publishedAt" -> wrapper.orderByDesc("published_at");
-            case "importance" -> wrapper.last("ORDER BY FIELD(importance,'low','medium','high','urgent') DESC, created_at DESC");
+            case "importance" -> wrapper.last("ORDER BY CASE importance WHEN 'urgent' THEN 4" +
+                    " WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC, created_at DESC");
             case "relevance" -> wrapper.orderByDesc("relevance");
             case "heat" -> wrapper.last("ORDER BY (COALESCE(like_count,0)*2 + COALESCE(retweet_count,0)*3" +
                     " + COALESCE(comment_count,0)*5 + COALESCE(danmaku_count,0)*2 + COALESCE(view_count,0)*0.01) DESC");

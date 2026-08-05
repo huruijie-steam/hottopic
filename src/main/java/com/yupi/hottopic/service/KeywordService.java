@@ -1,6 +1,7 @@
 package com.yupi.hottopic.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.yupi.hottopic.dto.KeywordVO;
 import com.yupi.hottopic.entity.Hotspot;
 import com.yupi.hottopic.entity.Keyword;
@@ -104,10 +105,10 @@ public class KeywordService {
      */
     @Transactional
     public void delete(String id) {
-        Hotspot update = new Hotspot();
-        update.setKeywordId(null);
-        hotspotMapper.update(update,
-                new LambdaQueryWrapper<Hotspot>().eq(Hotspot::getKeywordId, id));
+        // UpdateWrapper.set 显式置空(null 字段不会被默认策略忽略)
+        hotspotMapper.update(null, new LambdaUpdateWrapper<Hotspot>()
+                .eq(Hotspot::getKeywordId, id)
+                .set(Hotspot::getKeywordId, null));
         keywordMapper.deleteById(id);
     }
 }
